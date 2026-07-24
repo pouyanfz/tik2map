@@ -1,0 +1,26 @@
+# Dependencies
+node_modules/
+
+# Build output
+functions/lib/
+web/dist/
+
+# Env files (never commit real keys)
+.env
+.env.local
+*.local
+!.env.example
+
+# Firebase
+.firebase/
+firebase-debug.log
+firebase-debug.*.log
+firestore-debug.log
+ui-debug.log
+
+# OS
+.DS_Store
+
+# Editors
+.vscode/
+.idea/
