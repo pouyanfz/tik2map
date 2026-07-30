@@ -24,7 +24,7 @@ export function AddTab({ onPlaceSaved }: AddTabProps) {
       setResult(res);
       setStatus("idle");
     } catch {
-      setErrorMessage("Couldn't resolve this link. Check the URL and try again.");
+      setErrorMessage("Couldn't find this place. Check the URL and try again.");
       setStatus("error");
     }
   }
@@ -53,7 +53,7 @@ export function AddTab({ onPlaceSaved }: AddTabProps) {
         disabled={status === "resolving"}
       />
       <button className="add-tab__submit-btn" onClick={handleSubmit} disabled={status === "resolving" || !url.trim()}>
-        {status === "resolving" ? "Resolving..." : "Resolve place"}
+        {status === "resolving" ? "Finding..." : "Find place"}
       </button>
 
       {status === "error" && (

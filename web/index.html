@@ -1,6 +1,18 @@
 <!doctype html>
 <html lang="en">
   <head>
+    <script>
+      // Applied before any CSS paints to avoid a flash of the wrong theme -
+      // mirrors web/src/lib/theme.ts's applyTheme(), kept inline (not
+      // imported) so it runs immediately rather than waiting on the module
+      // graph.
+      (function () {
+        var stored = localStorage.getItem("tik2map-theme");
+        if (stored === "light" || stored === "dark") {
+          document.documentElement.setAttribute("data-theme", stored);
+        }
+      })();
+    </script>
     <meta charset="UTF-8" />
     <link rel="icon" type="image/svg+xml" href="/favicon.svg" />
     <meta name="viewport" content="width=device-width, initial-scale=1.0, viewport-fit=cover" />

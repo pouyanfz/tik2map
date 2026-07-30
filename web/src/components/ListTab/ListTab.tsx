@@ -2,7 +2,21 @@ import { useRef, useState } from "react";
 import { PlaceDetailSheet } from "../MapTab/PlaceDetailSheet";
 import { SwipeablePlaceCard } from "./SwipeablePlaceCard";
 import { savePlace, deletePlace } from "../../lib/functions";
+import { getStoredTheme, setStoredTheme } from "../../lib/theme";
+import type { ThemePreference } from "../../lib/theme";
 import type { Place } from "../../types";
+
+const THEME_LABELS: Record<ThemePreference, string> = {
+  auto: "🌓 Auto",
+  light: "☀️ Light",
+  dark: "🌙 Dark",
+};
+
+const NEXT_THEME: Record<ThemePreference, ThemePreference> = {
+  auto: "light",
+  light: "dark",
+  dark: "auto",
+};
 
 function downloadJson(filename: string, data: unknown) {
   const blob = new Blob([JSON.stringify(data, null, 2)], { type: "application/json" });
@@ -24,7 +38,14 @@ export function ListTab({ places, placesLoading, onImported }: ListTabProps) {
   const [selectedPlace, setSelectedPlace] = useState<Place | null>(null);
   const [importing, setImporting] = useState(false);
   const [importStatus, setImportStatus] = useState<string | null>(null);
+  const [theme, setTheme] = useState<ThemePreference>(() => getStoredTheme());
   const fileInputRef = useRef<HTMLInputElement>(null);
+
+  function handleThemeToggle() {
+    const next = NEXT_THEME[theme];
+    setStoredTheme(next);
+    setTheme(next);
+  }
 
   function handleExport() {
     const data = places.map((p) => ({
@@ -123,6 +144,9 @@ export function ListTab({ places, placesLoading, onImported }: ListTabProps) {
       <div className="list-tab__header">
         <h2>Your places</h2>
         <div className="list-tab__actions">
+          <button type="button" onClick={handleThemeToggle}>
+            {THEME_LABELS[theme]}
+          </button>
           <button type="button" onClick={handleExport} disabled={places.length === 0}>
             Export
           </button>

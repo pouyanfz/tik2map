@@ -5,6 +5,7 @@ import { getTagStyle } from "../../lib/tags";
 import { getCuisineOption } from "../../lib/cuisines";
 import { getMapboxStyle } from "../../lib/mapStyle";
 import { toggleId } from "../../lib/arrayUtils";
+import { THEME_CHANGE_EVENT } from "../../lib/theme";
 import { PlaceDetailSheet } from "./PlaceDetailSheet";
 import { FilterPanel } from "./FilterPanel";
 import type { CameraAction, Place } from "../../types";
@@ -91,19 +92,22 @@ export function MapView({ places, placesLoading, cameraAction }: MapViewProps) {
     geolocateControl.on("error", () => setGeoSettled(true));
     map.on("load", () => geolocateControl.trigger());
 
-    // Keep the map's style in sync with OS-level light/dark switches - the
-    // rest of the UI reacts instantly via the same media query in CSS, but
+    // Keep the map's style in sync with both OS-level light/dark switches
+    // and an explicit in-app theme choice - the rest of the UI reacts
+    // instantly via CSS (media query or the data-theme override), but
     // Mapbox's style is otherwise only set once at map creation and stays
     // stale (since MapView stays mounted for the app's whole lifetime, not
     // remounted per visit) until a full page reload.
     const colorSchemeQuery = window.matchMedia("(prefers-color-scheme: dark)");
-    function handleColorSchemeChange() {
+    function handleThemeChange() {
       map.setStyle(getMapboxStyle());
     }
-    colorSchemeQuery.addEventListener("change", handleColorSchemeChange);
+    colorSchemeQuery.addEventListener("change", handleThemeChange);
+    window.addEventListener(THEME_CHANGE_EVENT, handleThemeChange);
 
     return () => {
-      colorSchemeQuery.removeEventListener("change", handleColorSchemeChange);
+      colorSchemeQuery.removeEventListener("change", handleThemeChange);
+      window.removeEventListener(THEME_CHANGE_EVENT, handleThemeChange);
       map.remove();
     };
   }, []);
@@ -185,12 +189,15 @@ export function MapView({ places, placesLoading, cameraAction }: MapViewProps) {
   }, [filteredPlaces]);
 
   const categories = useMemo(() => Array.from(new Set(places.map((p) => p.category))).sort(), [places]);
+  const activeFilterCount =
+    selectedTags.length + selectedOccasions.length + selectedCategories.length + selectedCuisines.length;
 
   return (
     <div className="map-view-container">
       <div ref={containerRef} className="map-view" />
       <button type="button" className="map-filter-btn" onClick={() => setFilterOpen(true)}>
-        Filter
+        <span aria-hidden="true">🔽</span> Filter
+        {activeFilterCount > 0 && <span className="map-filter-btn__badge">{activeFilterCount}</span>}
       </button>
       <FilterPanel
         isOpen={filterOpen}
