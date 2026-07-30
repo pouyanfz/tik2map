@@ -11,8 +11,9 @@ async function main() {
     process.exit(1);
   }
 
-  const caption = await fetchTikTokCaption(tiktokUrl);
+  const { caption, thumbnailUrl } = await fetchTikTokCaption(tiktokUrl);
   console.log("Caption:", caption);
+  console.log("Thumbnail URL:", thumbnailUrl);
 }
 
 main().catch((err) => {

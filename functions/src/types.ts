@@ -19,7 +19,16 @@ export interface ResolvePlaceRequest {
 export interface ResolvePlaceResponse {
   tiktokUrl: string;
   caption: string;
+  thumbnailUrl: string | null;
   extracted: ExtractedPlace | null;
+  resolved: ResolvedPlace | null;
+}
+
+export interface SearchPlaceRequest {
+  query: string;
+}
+
+export interface SearchPlaceResponse {
   resolved: ResolvedPlace | null;
 }
 
@@ -33,5 +42,20 @@ export interface SavePlaceRequest {
   category: string;
   note?: string;
   tags?: string[];
-  occasion?: string | string[];
+  occasion?: string[];
+  cuisine?: string;
+  thumbnailUrl?: string | null;
+}
+
+export interface UpdatePlaceRequest {
+  id: string;
+  placeName?: string;
+  note?: string;
+  tags?: string[];
+  occasion?: string[];
+  cuisine?: string;
+}
+
+export interface DeletePlaceRequest {
+  id: string;
 }
