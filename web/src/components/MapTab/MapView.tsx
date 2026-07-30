@@ -196,7 +196,7 @@ export function MapView({ places, placesLoading, cameraAction }: MapViewProps) {
     <div className="map-view-container">
       <div ref={containerRef} className="map-view" />
       <button type="button" className="map-filter-btn" onClick={() => setFilterOpen(true)}>
-        <span aria-hidden="true">🔽</span> Filter
+        Filter
         {activeFilterCount > 0 && <span className="map-filter-btn__badge">{activeFilterCount}</span>}
       </button>
       <FilterPanel
