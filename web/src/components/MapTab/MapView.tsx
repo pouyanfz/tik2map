@@ -70,27 +70,42 @@ export function MapView({ places, placesLoading, cameraAction }: MapViewProps) {
       zoom: FALLBACK_ZOOM,
     });
     mapRef.current = map;
-    map.addControl(
-      new mapboxgl.GeolocateControl({ positionOptions: { enableHighAccuracy: true }, trackUserLocation: true }),
-      "bottom-left"
-    );
 
-    return () => map.remove();
-  }, []);
-
-  useEffect(() => {
-    if (!navigator.geolocation) {
+    // A second, independent navigator.geolocation.getCurrentPosition() call
+    // (removed) used to race this control's own internal geolocation
+    // request - whichever lost the race could get a spurious
+    // PERMISSION_DENIED, which permanently disables the button's UI for the
+    // rest of the page's life (Mapbox's GeolocateControl sets
+    // `_geolocateButton.disabled = true` on a denied error and never clears
+    // it). Routing everything through this one control's own events avoids
+    // the race entirely.
+    const geolocateControl = new mapboxgl.GeolocateControl({
+      positionOptions: { enableHighAccuracy: true },
+      trackUserLocation: true,
+    });
+    map.addControl(geolocateControl, "bottom-left");
+    geolocateControl.on("geolocate", (position) => {
+      setUserLocation([position.coords.longitude, position.coords.latitude]);
       setGeoSettled(true);
-      return;
+    });
+    geolocateControl.on("error", () => setGeoSettled(true));
+    map.on("load", () => geolocateControl.trigger());
+
+    // Keep the map's style in sync with OS-level light/dark switches - the
+    // rest of the UI reacts instantly via the same media query in CSS, but
+    // Mapbox's style is otherwise only set once at map creation and stays
+    // stale (since MapView stays mounted for the app's whole lifetime, not
+    // remounted per visit) until a full page reload.
+    const colorSchemeQuery = window.matchMedia("(prefers-color-scheme: dark)");
+    function handleColorSchemeChange() {
+      map.setStyle(getMapboxStyle());
     }
-    navigator.geolocation.getCurrentPosition(
-      (pos) => {
-        setUserLocation([pos.coords.longitude, pos.coords.latitude]);
-        setGeoSettled(true);
-      },
-      () => setGeoSettled(true),
-      { timeout: 5000 }
-    );
+    colorSchemeQuery.addEventListener("change", handleColorSchemeChange);
+
+    return () => {
+      colorSchemeQuery.removeEventListener("change", handleColorSchemeChange);
+      map.remove();
+    };
   }, []);
 
   // Decide the initial view once, after we know whether geolocation succeeded
