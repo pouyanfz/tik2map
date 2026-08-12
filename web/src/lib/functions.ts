@@ -7,14 +7,19 @@ import type {
   UpdatePlacePayload,
 } from "../types";
 
+// Shorter than the SDK's 70s default so a stuck request surfaces an error
+// (and the retry button) well before the user gives up and force-closes the
+// app, matching the backend's own onCall timeoutSeconds for these two.
 const resolvePlaceFromTikTokCallable = httpsCallable<{ tiktokUrl: string }, ResolvePlaceResponse>(
   functions,
-  "resolvePlaceFromTikTok"
+  "resolvePlaceFromTikTok",
+  { timeout: 45_000 }
 );
 
 const searchPlaceCallable = httpsCallable<{ query: string }, SearchPlaceResponse>(
   functions,
-  "searchPlace"
+  "searchPlace",
+  { timeout: 30_000 }
 );
 
 const savePlaceCallable = httpsCallable<SavePlacePayload, { id: string }>(functions, "savePlace");

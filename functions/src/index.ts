@@ -30,33 +30,53 @@ async function getPlaceDocOrThrow(db: Firestore, id: string) {
   return docRef;
 }
 
+// onCall redacts any thrown error that isn't already an HttpsError down to a
+// message-less generic "INTERNAL" before it reaches the client - this
+// rethrows unexpected failures (e.g. a Firestore outage) as an HttpsError
+// carrying a real message, so the client can show it instead of nothing.
+async function withReadableErrors<T>(fn: () => Promise<T>): Promise<T> {
+  try {
+    return await fn();
+  } catch (err) {
+    if (err instanceof HttpsError) throw err;
+    throw new HttpsError("internal", (err as Error).message || "Something went wrong. Please try again.");
+  }
+}
+
 /**
  * Runs the extraction pipeline (oEmbed -> Gemini -> Places) for a TikTok URL.
  * Does not write to Firestore - the client shows a confirmation modal with
  * this result and calls savePlace separately once the user confirms.
  */
 export const resolvePlaceFromTikTok = onCall<ResolvePlaceRequest>(
-  { secrets: [geminiApiKey, placesApiKey] },
+  { secrets: [geminiApiKey, placesApiKey], timeoutSeconds: 45 },
   async (request): Promise<ResolvePlaceResponse> => {
     const { tiktokUrl } = request.data;
     if (!tiktokUrl || typeof tiktokUrl !== "string") {
       throw new HttpsError("invalid-argument", "tiktokUrl is required.");
     }
 
-    const { caption, thumbnailUrl } = await fetchTikTokCaption(tiktokUrl);
+    // Every step below throws a plain Error with a message meant for the
+    // user (not a stack trace) - withReadableErrors is what turns that into
+    // something the client actually sees, instead of the message-less
+    // generic "internal" error onCall defaults to, which is why the Add tab
+    // used to look "stuck" with nothing to explain what went wrong.
+    return withReadableErrors(async () => {
+      const { caption, thumbnailUrl } = await fetchTikTokCaption(tiktokUrl);
 
-    const extracted = await extractPlaceFromCaption(caption, geminiApiKey.value());
-    if (!extracted) {
-      return { tiktokUrl, caption, thumbnailUrl, extracted: null, resolved: null };
-    }
+      const extracted = await extractPlaceFromCaption(caption, geminiApiKey.value());
+      if (!extracted) {
+        return { tiktokUrl, caption, thumbnailUrl, extracted: null, candidates: [] };
+      }
 
-    const query = extracted.address
-      ? `${extracted.placeName}, ${extracted.address}`
-      : extracted.placeName;
+      const query = extracted.address
+        ? `${extracted.placeName}, ${extracted.address}`
+        : extracted.placeName;
 
-    const resolved = await resolvePlaceViaPlacesApi(query, placesApiKey.value());
+      const candidates = await resolvePlaceViaPlacesApi(query, placesApiKey.value());
 
-    return { tiktokUrl, caption, thumbnailUrl, extracted, resolved };
+      return { tiktokUrl, caption, thumbnailUrl, extracted, candidates };
+    });
   }
 );
 
@@ -67,15 +87,17 @@ export const resolvePlaceFromTikTok = onCall<ResolvePlaceRequest>(
  * resolvePlaceFromTikTok uses internally, just callable directly.
  */
 export const searchPlace = onCall<SearchPlaceRequest>(
-  { secrets: [placesApiKey] },
+  { secrets: [placesApiKey], timeoutSeconds: 30 },
   async (request): Promise<SearchPlaceResponse> => {
     const { query } = request.data;
     if (!query || typeof query !== "string") {
       throw new HttpsError("invalid-argument", "query is required.");
     }
 
-    const resolved = await resolvePlaceViaPlacesApi(query, placesApiKey.value());
-    return { resolved };
+    return withReadableErrors(async () => {
+      const candidates = await resolvePlaceViaPlacesApi(query, placesApiKey.value());
+      return { candidates };
+    });
   }
 );
 
@@ -90,30 +112,32 @@ export const savePlace = onCall<SavePlaceRequest>(async (request) => {
     throw new HttpsError("invalid-argument", "placeName, address, lat, and lng are required.");
   }
 
-  const db = getFirestore();
+  return withReadableErrors(async () => {
+    const db = getFirestore();
 
-  const existing = await db.collection("places").where("placeId", "==", data.placeId).limit(1).get();
-  if (!existing.empty) {
-    throw new HttpsError("already-exists", "This place is already saved.");
-  }
+    const existing = await db.collection("places").where("placeId", "==", data.placeId).limit(1).get();
+    if (!existing.empty) {
+      throw new HttpsError("already-exists", "This place is already saved.");
+    }
 
-  const docRef = await db.collection("places").add({
-    tiktokUrl: data.tiktokUrl,
-    placeName: data.placeName,
-    address: data.address,
-    lat: data.lat,
-    lng: data.lng,
-    placeId: data.placeId,
-    category: data.category,
-    note: data.note ?? "",
-    tags: data.tags ?? [],
-    occasion: data.occasion ?? [],
-    cuisine: data.cuisine ?? "",
-    thumbnailUrl: data.thumbnailUrl ?? null,
-    createdAt: new Date(),
+    const docRef = await db.collection("places").add({
+      tiktokUrl: data.tiktokUrl,
+      placeName: data.placeName,
+      address: data.address,
+      lat: data.lat,
+      lng: data.lng,
+      placeId: data.placeId,
+      category: data.category,
+      note: data.note ?? "",
+      tags: data.tags ?? [],
+      occasion: data.occasion ?? [],
+      cuisine: data.cuisine ?? "",
+      thumbnailUrl: data.thumbnailUrl ?? null,
+      createdAt: new Date(),
+    });
+
+    return { id: docRef.id };
   });
-
-  return { id: docRef.id };
 });
 
 /**
@@ -134,11 +158,13 @@ export const updatePlace = onCall<UpdatePlaceRequest>(async (request) => {
   if (occasion !== undefined) update.occasion = occasion;
   if (cuisine !== undefined) update.cuisine = cuisine;
 
-  const db = getFirestore();
-  const docRef = await getPlaceDocOrThrow(db, id);
+  return withReadableErrors(async () => {
+    const db = getFirestore();
+    const docRef = await getPlaceDocOrThrow(db, id);
 
-  await docRef.update(update);
-  return { id };
+    await docRef.update(update);
+    return { id };
+  });
 });
 
 /**
@@ -151,9 +177,11 @@ export const deletePlace = onCall<DeletePlaceRequest>(async (request) => {
     throw new HttpsError("invalid-argument", "id is required.");
   }
 
-  const db = getFirestore();
-  const docRef = await getPlaceDocOrThrow(db, id);
+  return withReadableErrors(async () => {
+    const db = getFirestore();
+    const docRef = await getPlaceDocOrThrow(db, id);
 
-  await docRef.delete();
-  return { id };
+    await docRef.delete();
+    return { id };
+  });
 });

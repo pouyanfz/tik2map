@@ -21,7 +21,12 @@ export interface ResolvePlaceResponse {
   caption: string;
   thumbnailUrl: string | null;
   extracted: ExtractedPlace | null;
-  resolved: ResolvedPlace | null;
+  // Ranked list of Places API matches (possibly empty) - the caption's guess
+  // at a name doesn't always match the business's real listed name (e.g.
+  // "Grizzly Bear Restaurant" vs. the actual "Grizzly Bar"), so the top hit
+  // isn't always right. The client offers these as a picker instead of
+  // discarding everything but candidates[0].
+  candidates: ResolvedPlace[];
 }
 
 export interface SearchPlaceRequest {
@@ -29,7 +34,7 @@ export interface SearchPlaceRequest {
 }
 
 export interface SearchPlaceResponse {
-  resolved: ResolvedPlace | null;
+  candidates: ResolvedPlace[];
 }
 
 export interface SavePlaceRequest {

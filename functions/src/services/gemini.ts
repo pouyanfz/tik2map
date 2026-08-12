@@ -6,6 +6,7 @@ import type { ExtractedPlace } from "../types";
 // this doesn't need to be manually bumped each time Google deprecates a
 // pinned version.
 const MODEL = "gemini-flash-lite-latest";
+const REQUEST_TIMEOUT_MS = 15_000;
 
 const RESPONSE_SCHEMA = {
   type: Type.OBJECT,
@@ -43,14 +44,20 @@ export async function extractPlaceFromCaption(
 ): Promise<ExtractedPlace | null> {
   const ai = new GoogleGenAI({ apiKey });
 
-  const response = await ai.models.generateContent({
-    model: MODEL,
-    contents: PROMPT.replace("{{caption}}", caption),
-    config: {
-      responseMimeType: "application/json",
-      responseSchema: RESPONSE_SCHEMA,
-    },
-  });
+  let response;
+  try {
+    response = await ai.models.generateContent({
+      model: MODEL,
+      contents: PROMPT.replace("{{caption}}", caption),
+      config: {
+        responseMimeType: "application/json",
+        responseSchema: RESPONSE_SCHEMA,
+        httpOptions: { timeout: REQUEST_TIMEOUT_MS },
+      },
+    });
+  } catch (err) {
+    throw new Error(`Gemini request failed: ${(err as Error).message}`);
+  }
 
   const text = response.text;
   if (!text) {

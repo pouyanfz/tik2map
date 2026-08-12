@@ -17,8 +17,8 @@ async function main() {
     process.exit(1);
   }
 
-  const resolved = await resolvePlace(query, apiKey);
-  console.log("Resolved:", resolved);
+  const candidates = await resolvePlace(query, apiKey);
+  console.log("Candidates:", candidates);
 }
 
 main().catch((err) => {

@@ -12,6 +12,28 @@ import type { CameraAction, Place } from "../../types";
 
 const FALLBACK_CENTER: [number, number] = [0, 20];
 const FALLBACK_ZOOM = 1.5;
+const LAST_LOCATION_KEY = "tik2map-last-location";
+
+// iOS treats a standalone home-screen PWA's geolocation permission as
+// tied to that launch's WebKit session rather than persisting it
+// per-origin like Safari does, so the OS permission prompt can reappear on
+// every cold app open even after the user already granted it - that part
+// isn't something client code can suppress. What we *can* do is stop the
+// map from sitting on the blank world view while that prompt is pending, by
+// starting from wherever the user last was instead of FALLBACK_CENTER.
+function getCachedLocation(): [number, number] | null {
+  try {
+    const raw = localStorage.getItem(LAST_LOCATION_KEY);
+    if (!raw) return null;
+    const parsed = JSON.parse(raw);
+    if (Array.isArray(parsed) && parsed.length === 2 && parsed.every((n) => typeof n === "number")) {
+      return parsed as [number, number];
+    }
+  } catch {
+    // Ignore malformed/inaccessible storage (e.g. private browsing).
+  }
+  return null;
+}
 
 function createMarkerElement(color: string, icon: string, flag: string | undefined): HTMLDivElement {
   const wrapper = document.createElement("div");
@@ -64,11 +86,12 @@ export function MapView({ places, placesLoading, cameraAction }: MapViewProps) {
     if (!containerRef.current) return;
     mapboxgl.accessToken = import.meta.env.VITE_MAPBOX_TOKEN;
 
+    const cachedLocation = getCachedLocation();
     const map = new mapboxgl.Map({
       container: containerRef.current,
       style: getMapboxStyle(),
-      center: FALLBACK_CENTER,
-      zoom: FALLBACK_ZOOM,
+      center: cachedLocation ?? FALLBACK_CENTER,
+      zoom: cachedLocation ? 13 : FALLBACK_ZOOM,
     });
     mapRef.current = map;
 
@@ -86,8 +109,14 @@ export function MapView({ places, placesLoading, cameraAction }: MapViewProps) {
     });
     map.addControl(geolocateControl, "bottom-left");
     geolocateControl.on("geolocate", (position) => {
-      setUserLocation([position.coords.longitude, position.coords.latitude]);
+      const coords: [number, number] = [position.coords.longitude, position.coords.latitude];
+      setUserLocation(coords);
       setGeoSettled(true);
+      try {
+        localStorage.setItem(LAST_LOCATION_KEY, JSON.stringify(coords));
+      } catch {
+        // Ignore storage errors (e.g. private browsing, storage full).
+      }
     });
     geolocateControl.on("error", () => setGeoSettled(true));
     map.on("load", () => geolocateControl.trigger());

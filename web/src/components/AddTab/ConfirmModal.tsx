@@ -13,7 +13,7 @@ interface ConfirmModalProps {
   tiktokUrl: string;
   thumbnailUrl: string | null;
   extracted: ExtractedPlace | null;
-  resolved: ResolvedPlace | null;
+  candidates: ResolvedPlace[];
   onClose: () => void;
   onSaved: (place: { lat: number; lng: number }) => void;
 }
@@ -22,13 +22,20 @@ export function ConfirmModal({
   tiktokUrl,
   thumbnailUrl,
   extracted,
-  resolved,
+  candidates,
   onClose,
   onSaved,
 }: ConfirmModalProps) {
-  const [placeName, setPlaceName] = useState(resolved?.placeName ?? extracted?.placeName ?? "");
-  const [address, setAddress] = useState(resolved?.address ?? extracted?.address ?? "");
-  const [coords, setCoords] = useState<ResolvedPlace | null>(resolved);
+  const topMatch = candidates[0] ?? null;
+  const [placeName, setPlaceName] = useState(topMatch?.placeName ?? extracted?.placeName ?? "");
+  const [address, setAddress] = useState(topMatch?.address ?? extracted?.address ?? "");
+  const [coords, setCoords] = useState<ResolvedPlace | null>(topMatch);
+  // Places API text search is fuzzy - a caption's guess at a name doesn't
+  // always match the business's real listing (e.g. "Grizzly Bear
+  // Restaurant" in the caption vs. the actual "Grizzly Bar"). Surfacing
+  // every candidate it returned lets the user pick the right one instead of
+  // having to retype the exact listed name until it happens to match.
+  const [candidateList, setCandidateList] = useState<ResolvedPlace[]>(candidates);
   const [note, setNote] = useState("");
   const [selectedTags, setSelectedTags] = useState<string[]>([]);
   const [selectedOccasions, setSelectedOccasions] = useState<string[]>([]);
@@ -51,20 +58,26 @@ export function ConfirmModal({
     setSearchError(null);
     try {
       const query = address.trim() ? `${placeName.trim()}, ${address.trim()}` : placeName.trim();
-      const { resolved: found } = await searchPlace(query);
-      if (!found) {
+      const { candidates: found } = await searchPlace(query);
+      setCandidateList(found);
+      const top = found[0] ?? null;
+      if (!top) {
         setSearchError("No matching place found. Try adjusting the name, or add a city/neighborhood.");
         setCoords(null);
         return;
       }
-      setCoords(found);
-      setPlaceName(found.placeName);
-      setAddress(found.address);
-    } catch {
-      setSearchError("Search failed. Please try again.");
+      selectCandidate(top);
+    } catch (err) {
+      setSearchError((err as { message?: string })?.message || "Search failed. Please try again.");
     } finally {
       setSearching(false);
     }
+  }
+
+  function selectCandidate(candidate: ResolvedPlace) {
+    setCoords(candidate);
+    setPlaceName(candidate.placeName);
+    setAddress(candidate.address);
   }
 
   async function handleSave() {
@@ -89,10 +102,11 @@ export function ConfirmModal({
       onSaved({ lat: coords.lat, lng: coords.lng });
     } catch (err) {
       const code = (err as { code?: string })?.code ?? "";
+      const message = (err as { message?: string })?.message;
       setSaveError(
         code.includes("already-exists")
           ? "This place is already saved to your map."
-          : "Save failed. Please try again."
+          : message || "Save failed. Please try again."
       );
     } finally {
       setSaving(false);
@@ -153,6 +167,25 @@ export function ConfirmModal({
           {searching ? "Searching..." : coords ? "Search again" : "Search"}
         </button>
         {searchError && <div className="modal__error">{searchError}</div>}
+        {candidateList.length > 1 && (
+          <div className="modal__candidates">
+            <div className="modal__candidates-label">Did you mean one of these?</div>
+            {candidateList.map((candidate) => (
+              <button
+                type="button"
+                key={candidate.placeId}
+                className={
+                  "modal__candidate" +
+                  (coords?.placeId === candidate.placeId ? " modal__candidate--selected" : "")
+                }
+                onClick={() => selectCandidate(candidate)}
+              >
+                <span className="modal__candidate-name">{candidate.placeName}</span>
+                <span className="modal__candidate-address">{candidate.address}</span>
+              </button>
+            ))}
+          </div>
+        )}
         {coords && !searchError && (
           <>
             <div className="modal__success">✓ Location verified</div>

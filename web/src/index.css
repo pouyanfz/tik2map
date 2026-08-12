@@ -133,7 +133,15 @@ body {
 }
 
 .map-marker-wrapper {
-  position: relative;
+  /* Must stay "absolute", matching mapbox-gl.css's own .mapboxgl-marker rule
+     (top:0; left:0; position:absolute) that this element also carries -
+     Mapbox positions markers purely via a CSS transform computed relative to
+     that absolute top-left origin. Since this stylesheet loads after
+     mapbox-gl.css, "relative" here would win the cascade (equal
+     specificity, later wins) and break the transform math: every marker
+     except the first in DOM order would drift further off its real
+     coordinates as you zoom out. */
+  position: absolute;
   width: 32px;
   height: 32px;
   cursor: pointer;
@@ -586,6 +594,47 @@ body {
 .modal__search-btn:disabled {
   border-color: var(--disabled-bg);
   color: var(--disabled-bg);
+}
+
+.modal__candidates {
+  display: flex;
+  flex-direction: column;
+  gap: 0.4rem;
+  margin: 0.5rem 0;
+}
+
+.modal__candidates-label {
+  font-size: 0.8rem;
+  color: var(--text-secondary);
+}
+
+.modal__candidate {
+  display: flex;
+  flex-direction: column;
+  align-items: flex-start;
+  gap: 0.1rem;
+  width: 100%;
+  padding: 0.5rem 0.7rem;
+  border-radius: 8px;
+  border: 1px solid var(--border);
+  background: var(--surface);
+  text-align: left;
+}
+
+.modal__candidate--selected {
+  border-color: var(--accent);
+  background: var(--surface-2);
+}
+
+.modal__candidate-name {
+  font-weight: 600;
+  font-size: 0.9rem;
+  color: var(--text);
+}
+
+.modal__candidate-address {
+  font-size: 0.8rem;
+  color: var(--text-secondary);
 }
 
 .modal__actions {

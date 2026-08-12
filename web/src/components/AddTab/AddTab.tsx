@@ -23,8 +23,14 @@ export function AddTab({ onPlaceSaved }: AddTabProps) {
       const res = await resolvePlaceFromTikTok(url.trim());
       setResult(res);
       setStatus("idle");
-    } catch {
-      setErrorMessage("Couldn't find this place. Check the URL and try again.");
+    } catch (err) {
+      const code = (err as { code?: string })?.code ?? "";
+      const message = (err as { message?: string })?.message;
+      setErrorMessage(
+        code.includes("deadline-exceeded")
+          ? "This is taking too long. Check your connection and try again."
+          : message || "Couldn't find this place. Check the URL and try again."
+      );
       setStatus("error");
     }
   }
@@ -70,7 +76,7 @@ export function AddTab({ onPlaceSaved }: AddTabProps) {
           tiktokUrl={result.tiktokUrl}
           thumbnailUrl={result.thumbnailUrl}
           extracted={result.extracted}
-          resolved={result.resolved}
+          candidates={result.candidates}
           onClose={handleModalClose}
           onSaved={handleSaved}
         />

@@ -43,11 +43,11 @@ export interface ResolvePlaceResponse {
   caption: string;
   thumbnailUrl: string | null;
   extracted: ExtractedPlace | null;
-  resolved: ResolvedPlace | null;
+  candidates: ResolvedPlace[];
 }
 
 export interface SearchPlaceResponse {
-  resolved: ResolvedPlace | null;
+  candidates: ResolvedPlace[];
 }
 
 export interface SavePlacePayload {
